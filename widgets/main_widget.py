@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QFileDialog, QMessageBox, QLineEdit, QPushButton,
     QLabel, QHBoxLayout, QVBoxLayout, QGridLayout, QSpacerItem,
     QSizePolicy, QDoubleSpinBox, QRadioButton, QComboBox, QApplication, QCheckBox, QProgressDialog, QTabWidget,
-    QGroupBox
+    QGroupBox, QSlider
 )
 import time, os
 from .paint_widget import PaintWidget
@@ -19,11 +19,18 @@ class MainWidget(QWidget):
         self.imgWidthLineEdit = QLineEdit()
         self.imgHeightLineEdit = QLineEdit()
         self.loadImgBtn = QPushButton("加载图片")
+        self.rgbRadioBtn = QRadioButton("RGB")
+        self.grayRadioBtn = QRadioButton("GRAY")
+        self.grayRadioBtn.setChecked(True)
+        self.penSizeSlider = QSlider(Qt.Orientation.Horizontal)
+        self.penSizeSlider.setRange(3, 30)
+        self.penSizeSlider.setValue(5)
         self.drawImgBtn = QPushButton("绘制")
         self.colorRLineEdit = QLineEdit()
         self.colorGLineEdit = QLineEdit()
         self.colorBLineEdit = QLineEdit()
         self.saveBtn = QPushButton("保存")
+        self.resetBtn = QPushButton("重置")
         self.setUI()
         self.setup_connections()
         self.img_copy = None
@@ -33,12 +40,12 @@ class MainWidget(QWidget):
         # self.paintWidget.setImage(self.img)
 
         # 图像显示状态
-        self.show_mode = "RGB"  # "GRAY" 或 "RGB"
-
+        self.show_mode = "GRAY"  # "GRAY" 或 "RGB"
+        self.file_path = ""
         # 绘制状态
         self.is_drawing = False
         self.is_raw_img = False
-        self.raw_test()
+        # self.raw_test()
 
 
     def raw_test(self):
@@ -63,7 +70,7 @@ class MainWidget(QWidget):
         opLayout = QVBoxLayout()
 
         imgGroupBox = QGroupBox("图片信息")
-        imgGroupBox.setMaximumWidth(150)
+        imgGroupBox.setMaximumWidth(180)
         imgGroupBox.setMaximumHeight(250)
         groupBoxLayout = QVBoxLayout()
 
@@ -79,17 +86,32 @@ class MainWidget(QWidget):
         heightLayout.addWidget(imgHeightLabel)
         heightLayout.addWidget(self.imgHeightLineEdit)
 
+        sizeLayout = QHBoxLayout()
+        sizeLayout.addLayout(widthLayout)
+        sizeLayout.addLayout(heightLayout)
+
+        modeLayout = QHBoxLayout()
+        modeLayout.addWidget(QLabel("显示模式："))
+
+        modeLayout.addWidget(self.rgbRadioBtn)
+        modeLayout.addWidget(self.grayRadioBtn)
         groupBoxLayout.addWidget(self.loadImgBtn)
-        groupBoxLayout.addLayout(widthLayout)
-        groupBoxLayout.addLayout(heightLayout)
+        groupBoxLayout.addLayout(sizeLayout)
+        groupBoxLayout.addLayout(modeLayout)
         imgGroupBox.setLayout(groupBoxLayout)
 
         drawGroupBox = QGroupBox("绘制")
-        drawGroupBox.setMaximumWidth(150)
+        drawGroupBox.setMaximumWidth(180)
         drawGroupBox.setMaximumHeight(150)
         drawGroupBoxLayout = QVBoxLayout()
 
-        # 添加内容
+        ### 绘制相关组件
+        # 笔刷大小
+        penSizeLayout = QHBoxLayout()
+        penSizeLayout.addWidget(QLabel("笔刷大小："))
+        penSizeLayout.addWidget(self.penSizeSlider)
+
+        # 颜色输入
         colorEditLayout = QHBoxLayout()
         colorEditLayout.addWidget(QLabel("R:"))
         colorEditLayout.addWidget(self.colorRLineEdit)
@@ -98,16 +120,18 @@ class MainWidget(QWidget):
         colorEditLayout.addWidget(QLabel("B:"))
         colorEditLayout.addWidget(self.colorBLineEdit)
 
+        drawGroupBoxLayout.addLayout(penSizeLayout)
         drawGroupBoxLayout.addLayout(colorEditLayout)
         drawGroupBoxLayout.addWidget(self.drawImgBtn)
         """..."""
         drawGroupBox.setLayout(drawGroupBoxLayout)
 
         otherGroupBox = QGroupBox("其他")
-        otherGroupBox.setMaximumWidth(150)
+        otherGroupBox.setMaximumWidth(180)
         otherGroupBox.setMaximumHeight(150)
         otherGroupBoxLayout = QVBoxLayout()
         # 添加内容
+        otherGroupBoxLayout.addWidget(self.resetBtn)
         otherGroupBoxLayout.addWidget(self.saveBtn)
 
         otherGroupBox.setLayout(otherGroupBoxLayout)
@@ -126,14 +150,17 @@ class MainWidget(QWidget):
         self.loadImgBtn.clicked.connect(self.on_load_img_clicked)
         self.drawImgBtn.clicked.connect(self.on_draw_btn_clicked)
         self.paintWidget.mouse_moved.connect(self.draw_event)
+        self.resetBtn.clicked.connect(self.on_reset_btn_clicked)
         self.saveBtn.clicked.connect(self.on_save_btn_clicked)
+        self.rgbRadioBtn.toggled.connect(self.on_radio_btn_changed)
+        self.grayRadioBtn.toggled.connect(self.on_radio_btn_changed)
 
 
     def on_load_img_clicked(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "Images (*.raw;*.bmp;*.jpg;*.png)")
-        if not file_path:
+        self.file_path, _ = QFileDialog.getOpenFileName(self, "选择图片", "", "Images (*.raw;*.bmp;*.jpg;*.png)")
+        if not self.file_path:
             return
-        self.show_img(file_path)
+        self.show_img(self.file_path)
 
 
 
@@ -143,11 +170,13 @@ class MainWidget(QWidget):
         surfix = os.path.splitext(file_name)[1].lower()
         if surfix == ".bmp" or surfix == ".jpg" or surfix == ".png":
             img = QImage(file_path)
+            if self.show_mode == "GRAY":
+                img = img.convertToFormat(QImage.Format.Format_Grayscale8)
             if img.isNull():
                 QMessageBox.critical(self, "错误", "无法加载图片")
                 return
             self.is_raw_img = False
-            self.img_copy = img
+            self.img_copy = QImage(img)
             self.paintWidget.setImage(img)
             self.imgWidthLineEdit.setText(str(img.width()))
             self.imgHeightLineEdit.setText(str(img.height()))
@@ -160,7 +189,7 @@ class MainWidget(QWidget):
             img = raw_to_QImage(img_info['raw_data'], img_info['raw_width'], img_info['raw_height'], img_info['pattern'],
                             self.show_mode)
             self.is_raw_img = True
-            self.img_copy = img
+            self.img_copy = QImage(img)  # 保留原始图像的副本用于重置
             self.raw_info = img_info
             self.paintWidget.setImage(img)
             self.imgWidthLineEdit.setText(str(img_info['raw_width']))
@@ -194,7 +223,7 @@ class MainWidget(QWidget):
                 return
 
             event.acceptProposedAction()
-
+            self.file_path = file_path
             # 显示图片
             self.show_img(file_path)
 
@@ -247,7 +276,7 @@ class MainWidget(QWidget):
         if self.paintWidget.m_is_mouse_pressed:
             color = self.get_color_from_input()
             img_pos = self.paintWidget.getImgPos()
-            self.paintWidget.draw_img(img_pos, color, 5)
+            self.paintWidget.draw_img(img_pos, color, self.penSizeSlider.value())
 
 
     def on_save_btn_clicked(self):
@@ -288,3 +317,19 @@ class MainWidget(QWidget):
                 QMessageBox.critical(self, "错误", "保存图片失败")
 
         QMessageBox.information(self, "成功", f"图片保存成功到{file_path}")
+
+    def on_radio_btn_changed(self):
+        """显示模式切换事件"""
+        if self.rgbRadioBtn.isChecked():
+            self.show_mode = "RGB"
+        else:
+            self.show_mode = "GRAY"
+
+        # 如果当前是raw图，重新加载以应用显示模式
+        self.show_img(self.file_path)
+
+    def on_reset_btn_clicked(self):
+        print("重置")
+        """重置图片为原始状态"""
+        if self.img_copy is not None:
+            self.paintWidget.setImage(self.img_copy)

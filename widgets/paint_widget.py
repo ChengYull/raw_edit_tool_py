@@ -42,7 +42,6 @@ class PaintWidget(QWidget):
         self.setStyleSheet("background-color: red;")
     def setImage(self, image):
         self.m_q_img = image
-        print("图像大小：", image.width(), image.height())
         self.m_is_img_load = True
         self.update()
 
@@ -172,53 +171,3 @@ class PaintWidget(QWidget):
             painter.drawPoint(img_pos)
             painter.end()
             self.update()
-    def draw_on_raw(self, img_pos, color, width, bayer_pattern):
-        """在原始图像上绘制点"""
-        if not self.m_is_img_load or img_pos is None:
-            return
-        pattern_map = {
-            'rggb': {(0, 0):'r', (1, 0): 'g', (0, 1): 'g', (1, 1): 'b'},
-            'bggr': {(0, 0):'b', (1, 0): 'g', (0, 1): 'g', (1, 1): 'r'},
-            'grbg': {(0, 0):'g', (1, 0): 'r', (0, 1): 'b', (1, 1): 'g'},
-            'gbrg': {(0, 0):'g', (1, 0): 'b', (0, 1): 'r', (1, 1): 'g'}
-        }
-        current_pattern = pattern_map[bayer_pattern.lower()]
-        # 计算绘制区域
-        x, y = int(img_pos.x()), int(img_pos.y())
-        start_x = max(0, x - width)
-        end_x = min(self.m_q_img.width(), x + width + 1)
-        start_y = max(0, y - width)
-        end_y = min(self.m_q_img.height(), y + width + 1)
-        # 遍历绘制区域内的每个像素
-        for py in range(start_y, end_y):
-            for px in range(start_x, end_x):
-                # 计算在2x2拜耳阵列中的位置
-                pattern_x = px % 2
-                pattern_y = py % 2
-
-                # 获取该位置对应的颜色通道
-                channel = current_pattern[(pattern_x, pattern_y)]
-
-                original_pixel = self.m_q_img.pixel(px, py)
-                r_orig = (original_pixel >> 16) & 0xFF
-                g_orig = (original_pixel >> 8) & 0xFF
-                b_orig = original_pixel & 0xFF
-
-                # 根据通道修改对应分量，保留其他通道
-                if channel == 'r':
-                    r_new = r_orig & color.red()
-                    g_new = g_orig
-                    b_new = b_orig
-                elif channel == 'g':
-                    r_new = r_orig
-                    g_new = g_orig & color.green()
-                    b_new = b_orig
-                elif channel == 'b':
-                    r_new = r_orig
-                    g_new = g_orig
-                    b_new = b_orig & color.blue()
-                else:
-                    continue  # 安全处理
-                # 重新组合像素并写回
-                new_pixel = (r_new << 16) | (g_new << 8) | b_new
-                self.m_q_img.setPixel(px, py, new_pixel)
