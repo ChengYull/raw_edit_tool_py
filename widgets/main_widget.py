@@ -331,5 +331,4 @@ class MainWidget(QWidget):
     def on_reset_btn_clicked(self):
         print("重置")
         """重置图片为原始状态"""
-        if self.img_copy is not None:
-            self.paintWidget.setImage(self.img_copy)
+        self.show_img(self.file_path)
